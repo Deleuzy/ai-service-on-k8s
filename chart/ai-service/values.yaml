@@ -20,9 +20,9 @@ postgres:
   image: postgres:16-alpine
   storage: 1Gi
 
-otelCollector:
+tempo:
   enabled: true
-  image: otel/opentelemetry-collector-contrib:0.116.0
+  image: grafana/tempo:2.6.1
 
 networkPolicy:
   enabled: true

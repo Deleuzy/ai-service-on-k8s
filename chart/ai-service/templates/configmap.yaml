@@ -9,6 +9,6 @@ data:
   DB_HOST: {{ .Release.Name }}-postgres
   DB_USER: app
   DB_NAME: app
-  {{- if .Values.otelCollector.enabled }}
-  OTEL_EXPORTER_OTLP_ENDPOINT: http://{{ .Release.Name }}-otel-collector:4318
+  {{- if .Values.tempo.enabled }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://{{ .Release.Name }}-tempo:4318
   {{- end }}

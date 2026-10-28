@@ -14,7 +14,7 @@ diag() {
   kubectl -n $NS get pods,svc,statefulset,deploy -o wide || true
   kubectl -n $NS describe pods -l $APP | tail -60 || true
   kubectl -n $NS logs -l $APP --tail=40 || true
-  kubectl -n $NS logs deploy/$REL-otel-collector --tail=40 || true
+  kubectl -n $NS logs deploy/$REL-tempo --tail=40 || true
   kubectl -n $NS get events --sort-by=.lastTimestamp | tail -30 || true
 }
 check() {  # check "description" command...
@@ -46,12 +46,16 @@ check "check flags the room over 25 m" flags_lager
 check "bad input rejected with 422" code_is 422 -X POST localhost:$PORT/check -H 'content-type: application/json' -d '{"building":"X","rooms":[]}'
 stop_pf
 
-# Traces reach the OpenTelemetry Collector (batch export, so allow some seconds)
-span_seen() { for _ in $(seq 1 15); do kubectl -n $NS logs deploy/$REL-otel-collector | grep -q 'rule_check' && return 0; sleep 2; done; return 1; }
-check "trace span rule_check received by the OTel Collector" span_seen
-
 json_log_with_trace() { kubectl -n $NS logs -l $APP --tail=300 | grep '"msg": "check done"' | grep '"request_id": "e2e-1"' | grep -q '"trace_id": "[0-9a-f]\{32\}"'; }
 check "JSON log line 'check done' for the request carries a trace id" json_log_with_trace
+
+# The same trace id, looked up in Tempo, contains the rule_check span (batch export, so allow some seconds)
+TRACE_ID=$(kubectl -n $NS logs -l $APP --tail=300 | grep '"msg": "check done"' | grep '"request_id": "e2e-1"' | sed 's/.*"trace_id": "\([0-9a-f]\{32\}\)".*/\1/' | head -1)
+echo "trace id from the log: $TRACE_ID"
+start_pf svc/$REL-tempo 3200
+trace_in_tempo() { for _ in $(seq 1 30); do curl -s localhost:$PORT/api/traces/$TRACE_ID | grep -q 'rule_check' && return 0; sleep 2; done; return 1; }
+check "trace from the log found in Tempo with the rule_check span" trace_in_tempo
+stop_pf
 
 # Store outage: readiness must fail (traffic stops) but liveness must not restart the pods
 before=$(restarts)

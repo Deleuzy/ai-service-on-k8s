@@ -1,0 +1,73 @@
+{{- if .Values.tempo.enabled }}
+# Grafana Tempo as the trace backend. The service only speaks OTLP over HTTP; Tempo receives it on 4318
+# and answers trace lookups on 3200, which the end-to-end test uses to find the trace of a real request.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-tempo
+data:
+  tempo.yaml: |
+    stream_over_http_enabled: true
+    server:
+      http_listen_port: 3200
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            http:
+              endpoint: 0.0.0.0:4318
+    storage:
+      trace:
+        backend: local
+        wal:
+          path: /var/tempo/wal
+        local:
+          path: /var/tempo/blocks
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-tempo
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: tempo, app.kubernetes.io/instance: {{ .Release.Name }} }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: tempo, app.kubernetes.io/instance: {{ .Release.Name }} }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: tempo
+          image: {{ .Values.tempo.image }}
+          args: ["-config.file=/conf/tempo.yaml"]
+          ports:
+            - { name: otlp-http, containerPort: 4318 }
+            - { name: http, containerPort: 3200 }
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+            periodSeconds: 5
+            failureThreshold: 30
+          volumeMounts:
+            - { name: conf, mountPath: /conf }
+            - { name: data, mountPath: /var/tempo }
+      volumes:
+        - name: conf
+          configMap: { name: {{ .Release.Name }}-tempo }
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-tempo
+spec:
+  selector: { app.kubernetes.io/name: tempo, app.kubernetes.io/instance: {{ .Release.Name }} }
+  ports:
+    - { name: otlp-http, port: 4318 }
+    - { name: http, port: 3200 }
+{{- end }}
