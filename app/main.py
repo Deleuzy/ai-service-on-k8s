@@ -15,7 +15,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import Column, DateTime, Float, Integer, String, create_engine, func, text
+from sqlalchemy import Column, DateTime, Float, Integer, String, create_engine, func, inspect, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app import telemetry
@@ -83,9 +84,15 @@ _schema_ready = False
 def ensure_schema() -> None:
     """Create tables the first time the store is reachable. Pods often start before the database does."""
     global _schema_ready
-    if not _schema_ready:
+    if _schema_ready:
+        return
+    try:
         Base.metadata.create_all(engine)
-        _schema_ready = True
+    except IntegrityError:
+        # Two replicas raced to create the table. Fine if it exists now; otherwise re-raise.
+        if not inspect(engine).has_table(CheckRecord.__tablename__):
+            raise
+    _schema_ready = True
 
 
 @asynccontextmanager

@@ -22,7 +22,7 @@ postgres:
 
 otelCollector:
   enabled: true
-  image: otel/opentelemetry-collector:0.116.0
+  image: otel/opentelemetry-collector-contrib:0.116.0
 
 networkPolicy:
   enabled: true

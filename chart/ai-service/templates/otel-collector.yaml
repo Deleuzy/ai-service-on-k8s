@@ -35,6 +35,7 @@ spec:
       containers:
         - name: collector
           image: {{ .Values.otelCollector.image }}
+          command: ["/otelcol-contrib"]
           args: ["--config=/conf/config.yaml"]
           ports:
             - { containerPort: 4318 }
