@@ -77,11 +77,22 @@ engine = create_engine(database_url(), pool_pre_ping=True, pool_size=5) if not d
 Session = sessionmaker(bind=engine)
 
 
+_schema_ready = False
+
+
+def ensure_schema() -> None:
+    """Create tables the first time the store is reachable. Pods often start before the database does."""
+    global _schema_ready
+    if not _schema_ready:
+        Base.metadata.create_all(engine)
+        _schema_ready = True
+
+
 @asynccontextmanager
 async def lifespan(_app):
     try:
-        Base.metadata.create_all(engine)
-    except Exception as exc:  # the store may not be up yet; readiness will report it
+        ensure_schema()
+    except Exception as exc:  # the store may not be up yet; readiness retries it
         log.warning("schema init deferred", extra={"extra_fields": {"error": type(exc).__name__}})
     log.info("service started", extra={"extra_fields": {"max_exit_distance_m": MAX_EXIT_DISTANCE_M}})
     yield
@@ -114,6 +125,7 @@ def readyz():
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
+        ensure_schema()
     except Exception as exc:
         log.error("readiness failed: store unreachable", extra={"extra_fields": {"error": type(exc).__name__}})
         return JSONResponse(status_code=503, content={"status": "not ready", "reason": "store unreachable"})

@@ -123,3 +123,11 @@ def test_password_never_has_a_default(monkeypatch):
     import app.main as main
     with pytest.raises(KeyError):
         main.database_url()
+
+
+def test_schema_created_when_store_appears_late(client):
+    c, main = client
+    main._schema_ready = False
+    main.Base.metadata.drop_all(main.engine)
+    assert c.get("/readyz").status_code == 200
+    assert c.post("/check", json=BUILDING).status_code == 200
