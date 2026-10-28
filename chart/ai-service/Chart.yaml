@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ai-service
+description: Escape-route check service with probes, OpenTelemetry, secrets outside the chart and a Postgres store
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

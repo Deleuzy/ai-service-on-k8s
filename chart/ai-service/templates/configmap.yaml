@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ai.name" . }}
+  labels: {{- include "ai.labels" . | nindent 4 }}
+data:
+  MAX_EXIT_DISTANCE_M: {{ .Values.maxExitDistanceM | quote }}
+  SERVICE_VERSION: {{ .Values.serviceVersion | quote }}
+  DB_HOST: {{ .Release.Name }}-postgres
+  DB_USER: app
+  DB_NAME: app
+  {{- if .Values.otelCollector.enabled }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://{{ .Release.Name }}-otel-collector:4318
+  {{- end }}

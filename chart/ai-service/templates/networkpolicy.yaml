@@ -1,0 +1,33 @@
+{{- if .Values.networkPolicy.enabled }}
+# Only pods in this namespace may call the service, and only Postgres accepts traffic from it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ai.name" . }}
+spec:
+  podSelector:
+    matchLabels: {{- include "ai.selector" . | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - { port: 8000 }
+{{- if .Values.postgres.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-postgres
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: postgres, app.kubernetes.io/instance: {{ .Release.Name }} }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {{- include "ai.selector" . | nindent 14 }}
+      ports:
+        - { port: 5432 }
+{{- end }}
+{{- end }}

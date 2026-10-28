@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.3
+      - run: helm lint chart/ai-service
+      - run: helm template demo chart/ai-service > rendered.yaml && grep -c '^kind:' rendered.yaml
+      - name: No secrets in the chart
+        run: "! grep -rniE 'password: *[^ {]' chart/ai-service/values.yaml"
+
+  kind-e2e:
+    needs: [test, helm]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.3
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: ai-demo
+      - name: Build and load image
+        run: |
+          docker build -t ai-service:ci .
+          kind load docker-image ai-service:ci --name ai-demo
+      - name: End-to-end on Kubernetes
+        run: bash scripts/e2e.sh 2>&1 | tee e2e.log
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get all -A || true
+          kubectl -n ai-demo describe pods || true
+          kubectl -n ai-demo logs -l app.kubernetes.io/name=ai-service --tail=100 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-log
+          path: e2e.log

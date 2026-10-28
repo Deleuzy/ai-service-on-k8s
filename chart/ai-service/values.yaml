@@ -1,0 +1,28 @@
+image:
+  repository: ai-service
+  tag: dev
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+serviceVersion: "0.1.0"
+maxExitDistanceM: 25
+
+# The DB password is NOT in this chart. Create the Secret before installing:
+#   kubectl create secret generic ai-service-db --from-literal=password=<random>
+existingSecret: ai-service-db
+
+resources:
+  requests: { cpu: 50m, memory: 96Mi }
+  limits: { cpu: 500m, memory: 256Mi }
+
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  storage: 1Gi
+
+otelCollector:
+  enabled: true
+  image: otel/opentelemetry-collector:0.116.0
+
+networkPolicy:
+  enabled: true
